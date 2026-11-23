@@ -206,26 +206,61 @@ async function createView(svc) {
     return { action: 'deny' };
   });
 
-  wc.on('context-menu', (_e, p) => {
-    const items = [];
-    if (p.misspelledWord) {
-      for (const s of p.dictionarySuggestions.slice(0, 5)) items.push({ label: s, click: () => wc.replaceMisspelling(s) });
-      items.push({ label: 'Afegeix al diccionari', click: () => ses.addWordToSpellCheckerDictionary(p.misspelledWord) }, { type: 'separator' });
-    }
-    if (p.linkURL) items.push(
-      { label: 'Obre l\'enllaç al navegador', click: () => shell.openExternal(p.linkURL) },
-      { label: 'Copia l\'enllaç', click: () => clipboard.writeText(p.linkURL) }, { type: 'separator' });
-    if (p.isEditable) items.push({ role: 'undo', label: 'Desfés' }, { role: 'redo', label: 'Refés' }, { type: 'separator' },
-      { role: 'cut', label: 'Retalla' }, { role: 'copy', label: 'Copia' }, { role: 'paste', label: 'Enganxa' }, { role: 'selectAll', label: 'Selecciona-ho tot' });
-    else if (p.selectionText) items.push({ role: 'copy', label: 'Copia' });
-    if (items.length) items.push({ type: 'separator' });
-    items.push({ label: 'Enrere', enabled: wc.navigationHistory?.canGoBack?.() ?? wc.canGoBack(), click: () => goBack(wc) },
-      { label: 'Recarrega', click: () => wc.reload() },
-      { label: 'Inspecciona', click: () => wc.inspectElement(p.x, p.y) });
-    Menu.buildFromTemplate(items).popup({ window: win });
-  });
+  attachContextMenu(wc);
 
   wc.loadURL(svc.url);
+}
+
+// ── Menú del botó dret (vistes de servei i finestres que obren) ─────────────
+function attachContextMenu(wc) {
+  if (wc.__mhMenu) return;
+  wc.__mhMenu = true;
+  wc.on('context-menu', (_e, p) => {
+    const items = [];
+    const sep = () => { if (items.length && items[items.length - 1].type !== 'separator') items.push({ type: 'separator' }); };
+    const isWeb = (u) => /^https?:/i.test(u || '');
+
+    if (p.misspelledWord) {
+      for (const s of p.dictionarySuggestions.slice(0, 5)) items.push({ label: s, click: () => wc.replaceMisspelling(s) });
+      items.push({ label: 'Afegeix al diccionari', click: () => wc.session.addWordToSpellCheckerDictionary(p.misspelledWord) });
+      sep();
+    }
+    if (p.linkURL) {
+      items.push(
+        { label: 'Obre l\'enllaç al navegador', click: () => shell.openExternal(p.linkURL) },
+        { label: 'Copia l\'enllaç', click: () => clipboard.writeText(p.linkURL) });
+      sep();
+    }
+    // Imatges: copiar-les, copiar-ne l'adreça, desar-les o obrir-les
+    if (p.mediaType === 'image' && p.hasImageContents !== false) {
+      items.push({ label: 'Copia la imatge', click: () => wc.copyImageAt(p.x, p.y) });
+      if (isWeb(p.srcURL)) items.push({ label: 'Copia l\'adreça de la imatge', click: () => clipboard.writeText(p.srcURL) });
+      if (p.srcURL) items.push({ label: 'Desa la imatge…', click: () => wc.downloadURL(p.srcURL) });
+      if (isWeb(p.srcURL)) items.push({ label: 'Obre la imatge al navegador', click: () => shell.openExternal(p.srcURL) });
+      sep();
+    }
+    if ((p.mediaType === 'video' || p.mediaType === 'audio') && isWeb(p.srcURL)) {
+      items.push({ label: p.mediaType === 'video' ? 'Copia l\'adreça del vídeo' : 'Copia l\'adreça de l\'àudio', click: () => clipboard.writeText(p.srcURL) },
+        { label: 'Desa…', click: () => wc.downloadURL(p.srcURL) });
+      sep();
+    }
+    if (p.isEditable) {
+      items.push({ role: 'undo', label: 'Desfés' }, { role: 'redo', label: 'Refés' }, { type: 'separator' },
+        { role: 'cut', label: 'Retalla' }, { role: 'copy', label: 'Copia' }, { role: 'paste', label: 'Enganxa' },
+        { role: 'pasteAndMatchStyle', label: 'Enganxa com a text sense format' }, { role: 'selectAll', label: 'Selecciona-ho tot' });
+      sep();
+    } else if (p.selectionText) {
+      const t = p.selectionText.trim();
+      items.push({ role: 'copy', label: 'Copia' },
+        { label: `Cerca «${t.length > 25 ? t.slice(0, 25) + '…' : t}» a Google`, click: () => shell.openExternal('https://www.google.com/search?q=' + encodeURIComponent(t)) });
+      sep();
+    }
+    const canBack = wc.navigationHistory?.canGoBack?.() ?? wc.canGoBack();
+    items.push({ label: 'Enrere', enabled: canBack, click: () => goBack(wc) },
+      { label: 'Recarrega', click: () => wc.reload() },
+      { label: 'Inspecciona', click: () => wc.inspectElement(p.x, p.y) });
+    Menu.buildFromTemplate(items).popup({ window: BrowserWindow.fromWebContents(wc) || win });
+  });
 }
 
 function destroyView(id) {
@@ -666,6 +701,8 @@ app.on('web-contents-created', (_e, wc) => {
   // S'aplica a les vistes de servei i també a les finestres emergents que obren
   // (p. ex. "Continua amb Google" de Claude), que comparteixen la mateixa sessió.
   if (wc.session?.__multihub && wc.getType() !== 'backgroundPage') identity.attach(wc);
+  // Les finestres que obren els serveis (trucades, inicis de sessió, gestor de fitxers de cPanel...) també tenen menú
+  if (wc.session?.__mhServiceId && wc.getType() === 'window') attachContextMenu(wc);
 });
 
 app.whenReady().then(async () => {
