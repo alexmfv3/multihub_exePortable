@@ -105,9 +105,16 @@ function updateBadge() {
   if (!win || win.isDestroyed()) return;
   const act = !lock.locked && service(store.data.activeId);
   win.setTitle(`${total ? `(${total}) ` : ''}${act ? `${act.name} — ` : ''}MultiHub`);
+  // Número a la icona de la barra de tasques i de la safata: 1…9 o "+9"
+  const label = total > 9 ? '9plus' : String(total);
+  const desc = total ? `${total} missatge${total > 1 ? 's' : ''} sense llegir` : '';
   if (process.platform !== 'win32') app.setBadgeCount(total);
-  else win.setOverlayIcon(total ? nativeImage.createFromPath(path.join(ASSETS, 'badge.png')) : null, total ? `${total} sense llegir` : '');
-  tray?.setToolTip(total ? `MultiHub — ${total} sense llegir` : 'MultiHub');
+  else win.setOverlayIcon(total ? nativeImage.createFromPath(path.join(ASSETS, 'badges', `badge-${label}.png`)) : null, desc);
+  if (tray && tray.__mhBadge !== label) {
+    tray.__mhBadge = label;
+    tray.setImage(nativeImage.createFromPath(path.join(ASSETS, total ? path.join('badges', `tray-${label}.png`) : 'tray.png')));
+  }
+  tray?.setToolTip(total ? `MultiHub — ${desc}` : 'MultiHub');
 }
 
 function parseBadge(title) {
