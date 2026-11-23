@@ -8,6 +8,8 @@ module.exports = [
     hint: 'Per a comptes d\'empresa/escola canvia-ho a https://outlook.office.com/mail/' },
   { type: 'roundcube',    name: 'RoundCube',                  url: '',                                        color: '#37BEFF',
     requiresUrl: true, hint: 'URL del teu webmail, p. ex. https://elteudomini.cat:2096/ o https://webmail.elteudomini.cat/' },
+  { type: 'cpanel',       name: 'cPanel',                     url: '',                                        color: '#FF6C2C',
+    requiresUrl: true, hint: 'URL del teu cPanel, p. ex. https://elteudomini.cat:2083/ o https://elteudomini.cat/cpanel' },
   { type: 'yahoo',        name: 'Yahoo Mail',                 url: 'https://mail.yahoo.com/',                 color: '#6001D2' },
   { type: 'claude',       name: 'Claude',                     url: 'https://claude.ai/',                      color: '#D97757' },
   { type: 'ytmusic',      name: 'YouTube Music',              url: 'https://music.youtube.com/',              color: '#FF0000' },

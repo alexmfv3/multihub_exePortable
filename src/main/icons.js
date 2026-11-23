@@ -9,7 +9,7 @@ const { app, net } = require('electron');
 const DOMAINS = {
   whatsapp: 'web.whatsapp.com', instagram: 'www.instagram.com', 'instagram-dm': 'www.instagram.com',
   outlook: 'outlook.live.com', yahoo: 'mail.yahoo.com', claude: 'claude.ai', ytmusic: 'music.youtube.com',
-  discord: 'discord.com', gmail: 'mail.google.com', gdrive: 'drive.google.com', chatgpt: 'chatgpt.com'
+  discord: 'discord.com', cpanel: 'cpanel.net', gmail: 'mail.google.com', gdrive: 'drive.google.com', chatgpt: 'chatgpt.com'
 };
 
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml',
