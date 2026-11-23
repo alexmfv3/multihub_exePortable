@@ -9,6 +9,7 @@ const { ExtensionManager } = require('./extensions');
 const { Icons } = require('./icons');
 const Lock = require('./lock');
 const Downloads = require('./downloads');
+const { enableScreenShare } = require('./screen-picker');
 
 const DEV = process.argv.includes('--dev');
 const SIDEBAR = 72;
@@ -22,9 +23,13 @@ const identity = require('./identity')({ isEnabled: () => store?.data.settings.g
 const { CHROME_UA } = identity;
 app.userAgentFallback = CHROME_UA;
 
+// Perquè les trucades i les notificacions funcionin encara que el servei no estigui a la vista:
+// sense "adormir" la pàgina en segon pla i amb so automàtic (to de trucada entrant).
+const CALL_PREFS = { backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' };
+
 const ALLOWED_PERMISSIONS = new Set([
   'notifications', 'media', 'clipboard-read', 'clipboard-sanitized-write',
-  'fullscreen', 'pointerLock', 'mediaKeySystem', 'speaker-selection'
+  'fullscreen', 'pointerLock', 'mediaKeySystem', 'speaker-selection', 'display-capture'
 ]);
 
 // Dominis on s'obren finestres emergents DINS l'app (inicis de sessió, OAuth...)
@@ -132,6 +137,7 @@ function prepareSession(ses) {
   ses.setUserAgent(CHROME_UA);
   ses.setPermissionRequestHandler((_wc, perm, cb) => cb(ALLOWED_PERMISSIONS.has(perm)));
   ses.setPermissionCheckHandler((_wc, perm) => ALLOWED_PERMISSIONS.has(perm));
+  enableScreenShare(ses, () => win); // compartir pantalla a les trucades
   downloads.attach(ses);
   ses.webRequest.onBeforeSendHeaders((d, cb) => {
     identity.rewriteHeaders(d, ses);
@@ -164,7 +170,7 @@ async function createView(svc) {
   await extensions.registerSession(svc.id, ses); // ⟵ extensions abans de carregar la web
 
   const view = new WebContentsView({
-    webPreferences: { session: ses, contextIsolation: true, sandbox: true, spellcheck: true }
+    webPreferences: { session: ses, contextIsolation: true, sandbox: true, spellcheck: true, ...CALL_PREFS }
   });
   entry.view = view;
   const wc = view.webContents;
@@ -185,11 +191,14 @@ async function createView(svc) {
   wc.setWindowOpenHandler(({ url }) => {
     const u = safeUrl(url);
     const cur = safeUrl(wc.getURL());
-    if (!u || url === 'about:blank') return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true } };
+    const popupWin = (extra = {}) => ({ action: 'allow', overrideBrowserWindowOptions: {
+      autoHideMenuBar: true, ...extra, webPreferences: { session: ses, contextIsolation: true, sandbox: true, ...CALL_PREFS } } });
+    // Les trucades de WhatsApp Web s'obren en una finestra a part (about:blank o del mateix domini)
+    if (!u || url === 'about:blank') return popupWin({ width: 900, height: 650 });
     if (!/^https?:$/.test(u.protocol)) return { action: 'deny' };
     const inApp = AUTH_HOSTS.includes(u.hostname) || (cur && baseDomain(u.hostname) === baseDomain(cur.hostname));
     if (inApp) identity.notePopup(url);
-    if (inApp) return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true, width: 1000, height: 750 } };
+    if (inApp) return popupWin({ width: 1000, height: 750 });
     shell.openExternal(url);
     return { action: 'deny' };
   });
