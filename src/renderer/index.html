@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>MultiHub</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside id="sidebar">
+    <div id="service-list"></div>
+    <div class="sidebar-bottom">
+      <button class="side-btn" id="btn-add" title="Afegeix un servei (Ctrl+N)">＋</button>
+      <button class="side-btn" id="btn-ext" title="Extensions (Ctrl+E)">🧩</button>
+      <button class="side-btn" id="btn-lock" title="Bloqueja (Ctrl+L)">🔒</button>
+      <button class="side-btn" id="btn-settings" title="Configuració (Ctrl+,)">⚙</button>
+    </div>
+  </aside>
+
+  <header id="toolbar">
+    <div class="nav">
+      <button data-act="back" title="Enrere (Alt+←)">‹</button>
+      <button data-act="forward" title="Endavant (Alt+→)">›</button>
+      <button data-act="reload" title="Recarrega (Ctrl+R)">⟳</button>
+      <button data-act="home" title="Pàgina inicial">⌂</button>
+    </div>
+    <div id="active-name"></div>
+    <div id="ext-actions" title="Les extensions s'apliquen a tots els serveis"></div>
+    <button id="btn-downloads" class="ext-btn" title="Descàrregues (Ctrl+J)">⬇<span id="dl-badge"></span></button>
+  </header>
+
+  <main id="content">
+    <div id="empty">
+      <h1>Benvingut a MultiHub</h1>
+      <p>Afegeix tants comptes com vulguis de WhatsApp, Gmail, Discord, Claude… Cada un té la seva sessió independent.</p>
+      <p>Les <b>extensions</b> que instal·lis (Authenticator, gestors de contrasenyes, bloquejadors…) funcionen a <b>tots</b> els serveis alhora.</p>
+      <button class="primary" id="empty-add">＋ Afegeix el primer servei</button>
+    </div>
+  </main>
+
+  <div id="lockscreen" hidden>
+    <form id="lock-form" autocomplete="off">
+      <div class="lock-logo">🔒</div>
+      <h2>MultiHub està bloquejat</h2>
+      <input type="password" id="lock-pw" placeholder="Contrasenya mestra" autofocus>
+      <button class="primary" type="submit" id="lock-submit">Desbloqueja</button>
+      <div id="lock-error"></div>
+    </form>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

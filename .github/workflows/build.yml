@@ -1,0 +1,45 @@
+name: Compila MultiHub (Windows portable)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instal·la dependències
+        run: npm install --no-audit --no-fund
+
+      - name: Compila (portable .exe + .zip)
+        run: npx electron-builder --win portable zip --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Desa els fitxers com a artefacte
+        uses: actions/upload-artifact@v4
+        with:
+          name: MultiHub-windows
+          path: |
+            dist/*.exe
+            dist/*.zip
+
+      - name: Publica a la versió "darrera"
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete darrera --yes --cleanup-tag || true
+          gh release create darrera dist/*.exe dist/*.zip \
+            --title "MultiHub — darrera compilació" \
+            --notes "Compilat automàticament a partir del commit ${GITHUB_SHA::7}. Descarrega el .zip (recomanat) o el .exe portable."

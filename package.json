@@ -1,0 +1,63 @@
+{
+  "name": "multihub",
+  "productName": "MultiHub",
+  "version": "0.1.0",
+  "description": "Gestor de serveis web multi-compte (inspirat en Ferdium) amb extensions de navegador compartides entre tots els serveis",
+  "main": "src/main/main.js",
+  "author": "AlexMF",
+  "license": "Apache-2.0",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist:win": "electron-builder --win portable zip",
+    "dist:portable": "electron-builder --win portable",
+    "dist:zip": "electron-builder --win zip",
+    "dist:linux": "electron-builder --linux AppImage"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "cat.alexmf.multihub",
+    "productName": "MultiHub",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "MultiHub-${version}-portable.exe",
+      "unpackDirName": "MultiHub"
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "category": "Network"
+    },
+    "artifactName": "MultiHub-${version}-${os}-${arch}.${ext}",
+    "compression": "normal"
+  }
+}
