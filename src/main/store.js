@@ -9,7 +9,7 @@ const DEFAULTS = {
   downloads: [],     // historial de descàrregues
   lock: null,        // { salt, hash, autoMinutes, onSystemLock }
   activeId: null,
-  settings: { closeToTray: true, startMinimized: false, googleLoginCompat: true, showNames: true,
+  settings: { closeToTray: true, startMinimized: false, googleLoginCompat: true, showNames: true, adblock: true,
     downloadDir: null, askDownload: false }
 };
 

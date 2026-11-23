@@ -10,6 +10,7 @@ const { Icons } = require('./icons');
 const Lock = require('./lock');
 const Downloads = require('./downloads');
 const { enableScreenShare } = require('./screen-picker');
+const adblock = require('./adblock');
 
 const DEV = process.argv.includes('--dev');
 const SIDEBAR = 72;
@@ -167,6 +168,8 @@ async function createView(svc) {
   ses.__mhServiceId = svc.id;
   ses.__mhPartition = `persist:service-${svc.id}`;
   prepareSession(ses);
+  ses.__mhWantsAdblock = wantsAdblock(svc);
+  if (ses.__mhWantsAdblock) await adblock.enable(ses); // abans de carregar la web
   await extensions.registerSession(svc.id, ses); // ⟵ extensions abans de carregar la web
 
   const view = new WebContentsView({
@@ -263,6 +266,7 @@ function serviceAction(id, action) {
       svc.zoom = Math.round(z * 10) / 10; wc?.setZoomFactor(svc.zoom); store.save(); break;
     }
     case 'mute': setSound(svc, { muted: !svc.muted }); break;
+    case 'adblock': svc.adblock = svc.adblock === false; store.save(); applyAdblock(svc).then(() => wc?.reload()); broadcast(); break;
     case 'notifications': setSound(svc, { notifications: svc.notifications === false }); break;
     case 'clearCache': session.fromPartition(`persist:service-${id}`).clearCache().then(() => wc?.reload()); break;
   }
@@ -348,6 +352,14 @@ function buildMenu() {
       ...numbers
     ] }
   ]));
+}
+
+// ── Bloquejador d'anuncis ───────────────────────────────────────────────────
+function wantsAdblock(svc) { return store.data.settings.adblock !== false && svc.adblock !== false; }
+async function applyAdblock(svc) {
+  const ses = session.fromPartition(`persist:service-${svc.id}`);
+  ses.__mhWantsAdblock = wantsAdblock(svc);
+  if (ses.__mhWantsAdblock) await adblock.enable(ses, 30000); else await adblock.disable(ses);
 }
 
 // ── So i notificacions per servei ────────────────────────────────────────────
@@ -530,6 +542,7 @@ function registerIpc() {
       { label: svc.name, enabled: false }, { type: 'separator' },
       { label: 'Recarrega', click: () => serviceAction(id, 'reload') },
       { label: 'Silencia (sense sons ni avisos sonors)', type: 'checkbox', checked: !!svc.muted, click: () => serviceAction(id, 'mute') },
+      { label: 'Bloqueja anuncis', type: 'checkbox', enabled: store.data.settings.adblock !== false, checked: wantsAdblock(svc), click: () => serviceAction(id, 'adblock') },
       { label: 'Mostra notificacions', type: 'checkbox', checked: svc.notifications !== false, click: () => serviceAction(id, 'notifications') },
       { label: 'Edita…', click: () => win.webContents.send('ui:open', 'edit', id) },
       { label: 'Mou al grup', submenu: [
@@ -608,8 +621,12 @@ function registerIpc() {
     return r.filePaths[0];
   });
 
-  handle('settings:update', (patch) => {
+  handle('settings:update', async (patch) => {
     Object.assign(store.data.settings, patch); store.save(); broadcast();
+    if ('adblock' in patch) for (const svc of store.data.services) {
+      if (!views.has(svc.id)) continue;
+      await applyAdblock(svc); views.get(svc.id)?.view?.webContents.reload();
+    }
   });
 
   // Extensions

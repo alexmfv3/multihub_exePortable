@@ -15,7 +15,8 @@
     "dist:linux": "electron-builder --linux AppImage"
   },
   "dependencies": {
-    "adm-zip": "^0.5.16"
+    "adm-zip": "^0.5.16",
+    "@ghostery/adblocker-electron": "^2.0.0"
   },
   "devDependencies": {
     "electron": "^38.0.0",

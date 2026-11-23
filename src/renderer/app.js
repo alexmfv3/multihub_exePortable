@@ -442,6 +442,7 @@ function showSettings() {
       row('Mostra el nom de cada servei', 'Sota la icona, a la barra lateral.', set('showNames')),
       row('Tancar a la safata del sistema', 'En tancar la finestra, MultiHub continua obert per rebre notificacions.', set('closeToTray')),
       row('Iniciar minimitzat', 'Arrenca directament a la safata.', set('startMinimized')),
+      row('Bloquejador d\'anuncis integrat', 'Filtres d\'uBlock Origin i EasyList, també per a YouTube. Es pot desactivar per servei amb el clic dret.', set('adblock')),
       row('Compatibilitat d\'inici de sessió de Google', 'Evita l\'error "Aquest navegador pot no ser segur".', set('googleLoginCompat')));
 
     // Descàrregues
