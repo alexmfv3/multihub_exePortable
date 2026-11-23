@@ -107,7 +107,8 @@ function serviceItem(svc, nums) {
     oncontextmenu: (e) => { e.preventDefault(); mh.contextMenu(svc.id); }
   }, iconEl(svc));
   if (svc.badge) btn.append(h('span', { class: 'badge', text: svc.badge > 99 ? '99+' : String(svc.badge) }));
-  if (svc.muted) btn.append(h('span', { class: 'corner', text: '🔇' }));
+  if (svc.muted || svc.notifications === false) btn.append(h('span', { class: 'corner',
+    text: svc.notifications === false ? '🔕' : '🔇', title: svc.notifications === false ? 'Notificacions desactivades' : 'Silenciat' }));
   if (svc.crashed) btn.append(h('span', { class: 'corner', text: '⚠' }));
   const item = h('div', { class: `item${svc.id === S.activeId ? ' current' : ''}` }, btn,
     S.settings.showNames ? h('div', { class: 'label', text: svc.name, title: svc.name }) : null);

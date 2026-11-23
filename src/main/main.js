@@ -143,7 +143,7 @@ function prepareSession(ses) {
     identity.rewriteHeaders(d, ses);
     cb({ requestHeaders: d.requestHeaders });
   });
-  const preload = path.join(__dirname, '..', 'preload', 'google-compat.js');
+  const preload = path.join(__dirname, '..', 'preload', 'service-preload.js');
   if (typeof ses.registerPreloadScript === 'function') ses.registerPreloadScript({ type: 'frame', filePath: preload });
   else ses.setPreloads([...ses.getPreloads(), preload]);
 }
@@ -262,7 +262,8 @@ function serviceAction(id, action) {
       const z = action === 'zoomReset' ? 1 : Math.min(3, Math.max(0.3, (svc.zoom || 1) + (action === 'zoomIn' ? 0.1 : -0.1)));
       svc.zoom = Math.round(z * 10) / 10; wc?.setZoomFactor(svc.zoom); store.save(); break;
     }
-    case 'mute': svc.muted = !svc.muted; wc?.setAudioMuted(svc.muted); store.save(); broadcast(); break;
+    case 'mute': setSound(svc, { muted: !svc.muted }); break;
+    case 'notifications': setSound(svc, { notifications: svc.notifications === false }); break;
     case 'clearCache': session.fromPartition(`persist:service-${id}`).clearCache().then(() => wc?.reload()); break;
   }
 }
@@ -347,6 +348,24 @@ function buildMenu() {
       ...numbers
     ] }
   ]));
+}
+
+// ── So i notificacions per servei ────────────────────────────────────────────
+// "Silencia": cap so de la pàgina (missatges, to de trucada...) i notificacions de Windows mudes.
+//   Les finestres de trucada ja obertes continuen tenint so.
+// "Mostra notificacions" desactivat: no surt cap notificació d'aquell servei.
+function soundFlags(svc) {
+  return { silent: !!svc?.muted, notify: svc ? svc.notifications !== false : true };
+}
+function setSound(svc, patch) {
+  if ('muted' in patch) svc.muted = !!patch.muted;
+  if ('notifications' in patch) svc.notifications = !!patch.notifications;
+  views.get(svc.id)?.view?.webContents.setAudioMuted(!!svc.muted);
+  const ses = session.fromPartition(`persist:service-${svc.id}`);
+  for (const wc of require('electron').webContents.getAllWebContents()) {
+    if (wc.session === ses && !wc.isDestroyed()) wc.send('mh:flags', soundFlags(svc));
+  }
+  store.save(); broadcast();
 }
 
 // ── Grups ───────────────────────────────────────────────────────────────────
@@ -439,6 +458,17 @@ function handle(channel, fn) {
 }
 
 function registerIpc() {
+  // Preload de servei: demana l'estat de so/notificacions de la seva pestanya
+  ipcMain.on('mh:flags', (e) => { e.returnValue = soundFlags(service(e.sender.session?.__mhServiceId)); });
+  // Clic en una notificació: mostra MultiHub i obre aquell servei
+  ipcMain.on('mh:notification-click', (e) => {
+    const id = e.sender.session?.__mhServiceId;
+    if (!win || win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    win.show(); win.focus();
+    if (id && !lock.locked) activate(id);
+  });
+
   handle('state:get', () => state());
 
   handle('service:add', async ({ type, name, url, groupId, newGroup }) => {
@@ -467,7 +497,7 @@ function registerIpc() {
     if ('url' in patch) { const u = safeUrl(svc.url); if (!u) throw new Error('URL no vàlida'); svc.url = u.toString(); }
     store.save();
     if ('enabled' in patch) { if (svc.enabled) await createView(svc); else destroyView(id); }
-    if ('muted' in patch) views.get(id)?.view?.webContents.setAudioMuted(svc.muted);
+    if ('muted' in patch) setSound(svc, {});
     if ('url' in patch) views.get(id)?.view?.webContents.loadURL(svc.url);
     layout(); broadcast();
   });
@@ -499,7 +529,8 @@ function registerIpc() {
     Menu.buildFromTemplate([
       { label: svc.name, enabled: false }, { type: 'separator' },
       { label: 'Recarrega', click: () => serviceAction(id, 'reload') },
-      { label: svc.muted ? 'Activa el so' : 'Silencia', click: () => serviceAction(id, 'mute') },
+      { label: 'Silencia (sense sons ni avisos sonors)', type: 'checkbox', checked: !!svc.muted, click: () => serviceAction(id, 'mute') },
+      { label: 'Mostra notificacions', type: 'checkbox', checked: svc.notifications !== false, click: () => serviceAction(id, 'notifications') },
       { label: 'Edita…', click: () => win.webContents.send('ui:open', 'edit', id) },
       { label: 'Mou al grup', submenu: [
         ...store.data.groups.map(g => ({ label: g.name, type: 'radio', checked: svc.groupId === g.id, click: () => setGroup(id, g.id) })),
@@ -538,9 +569,11 @@ function registerIpc() {
       { label: g.name, enabled: false }, { type: 'separator' },
       { label: g.collapsed ? 'Desplega' : 'Plega', click: () => { g.collapsed = !g.collapsed; store.save(); broadcast(); } },
       { label: 'Reanomena…', click: () => win.webContents.send('ui:open', 'renameGroup', id) },
-      { label: 'Silencia tots els serveis', click: () => {
-        for (const s of store.data.services.filter(x => x.groupId === id)) { s.muted = true; views.get(s.id)?.view?.webContents.setAudioMuted(true); }
-        store.save(); broadcast();
+      { label: 'Silencia tots els serveis del grup', click: () => {
+        for (const s of store.data.services.filter(x => x.groupId === id)) setSound(s, { muted: true });
+      } },
+      { label: 'Treu el silenci a tots els serveis del grup', click: () => {
+        for (const s of store.data.services.filter(x => x.groupId === id)) setSound(s, { muted: false });
       } },
       { type: 'separator' },
       { label: 'Desfés el grup (els serveis es mantenen)', click: () => {
