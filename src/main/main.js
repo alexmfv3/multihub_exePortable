@@ -367,7 +367,7 @@ async function applyAdblock(svc) {
 //   Les finestres de trucada ja obertes continuen tenint so.
 // "Mostra notificacions" desactivat: no surt cap notificació d'aquell servei.
 function soundFlags(svc) {
-  return { silent: !!svc?.muted, notify: svc ? svc.notifications !== false : true };
+  return { silent: !!svc?.muted, notify: svc ? svc.notifications !== false : true, adblock: svc ? wantsAdblock(svc) : false };
 }
 function setSound(svc, patch) {
   if ('muted' in patch) svc.muted = !!patch.muted;
