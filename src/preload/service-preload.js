@@ -139,6 +139,32 @@ if (flags.adblock !== false && /(^|\.)youtube\.com$/.test(location.hostname)) {
   });
 }
 
+// ── 1c. Claude / ChatGPT: avisa quan acaben de respondre ────────────────────
+// Mira cada segon si s'està generant una resposta (botó "Atura" visible o missatge en curs).
+// Quan passa de "generant" a "acabat" (i ha durat uns segons), avisa MultiHub.
+const AI_DETECT = {
+  'claude.ai': () => document.querySelector('[data-is-streaming="true"], button[aria-label="Stop response"], button[aria-label*="Stop" i][aria-label*="respon" i], button[aria-label*="Detener" i], button[aria-label*="Atura" i]'),
+  'chatgpt.com': () => document.querySelector('[data-testid="stop-button"], button[aria-label*="Stop" i][aria-label*="stream" i], button[aria-label*="Detener" i], button[aria-label*="Atura" i]')
+};
+AI_DETECT['chat.openai.com'] = AI_DETECT['chatgpt.com'];
+const aiDetect = AI_DETECT[location.hostname];
+if (aiDetect && window.top === window) {
+  let generating = false, since = 0;
+  setInterval(() => {
+    if (flags.aiNotify === false) return;
+    let now = false;
+    try { now = !!aiDetect(); } catch { /* ignora */ }
+    if (now && !generating) { generating = true; since = Date.now(); }
+    else if (!now && generating) {
+      generating = false;
+      if (Date.now() - since >= 3000) {
+        const title = document.title.replace(/\s*[-–|]\s*(Claude|ChatGPT)\s*$/i, '').trim();
+        ipcRenderer.send('mh:ai-done', { title });
+      }
+    }
+  }, 1000);
+}
+
 // ── 2. Inici de sessió de Google (vegeu main/identity.js) ────────────────────
 if (/Firefox\/\d+/.test(navigator.userAgent)) {
   inMainWorld(() => {

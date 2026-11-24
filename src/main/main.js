@@ -1,7 +1,7 @@
 const path = require('path');
 const crypto = require('crypto');
 const {
-  app, BrowserWindow, WebContentsView, ipcMain, session, shell, Menu, Tray, nativeImage, dialog, clipboard
+  app, BrowserWindow, WebContentsView, ipcMain, session, shell, Menu, Tray, nativeImage, dialog, clipboard, Notification
 } = require('electron');
 const Store = require('./store');
 const CATALOG = require('./catalog');
@@ -27,6 +27,8 @@ app.userAgentFallback = CHROME_UA;
 // Perquè les trucades i les notificacions funcionin encara que el servei no estigui a la vista:
 // sense "adormir" la pàgina en segon pla i amb so automàtic (to de trucada entrant).
 const CALL_PREFS = { backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' };
+
+const AI_TYPES = new Set(['claude', 'chatgpt']);
 
 const ALLOWED_PERMISSIONS = new Set([
   'notifications', 'media', 'clipboard-read', 'clipboard-sanitized-write',
@@ -88,7 +90,7 @@ function state() {
     services: store.data.services.map(s => {
       const v = views.get(s.id) || {};
       const cat = CATALOG.find(c => c.type === s.type) || {};
-      return { ...s, color: cat.color, badge: v.badge || 0, icon: icons.get(icons.keyFor(s)),
+      return { ...s, color: cat.color, badge: (v.badge || 0) + (v.aiPending ? 1 : 0), icon: icons.get(icons.keyFor(s)),
         loading: !!v.loading, crashed: !!v.crashed };
     }),
     groups: store.data.groups,
@@ -107,7 +109,7 @@ function broadcast() {
 }
 
 function updateBadge() {
-  const total = [...views.values()].reduce((a, v) => a + (v.badge || 0), 0);
+  const total = [...views.values()].reduce((a, v) => a + (v.badge || 0) + (v.aiPending ? 1 : 0), 0);
   if (!win || win.isDestroyed()) return;
   const act = !lock.locked && service(store.data.activeId);
   win.setTitle(`${total ? `(${total}) ` : ''}${act ? `${act.name} — ` : ''}MultiHub`);
@@ -280,6 +282,7 @@ const goForward = (wc) => (wc.navigationHistory ? wc.navigationHistory.goForward
 function activate(id) {
   if (!service(id)) return;
   store.data.activeId = id; store.save();
+  const v = views.get(id); if (v) v.aiPending = false; // resposta vista
   layout();
   views.get(id)?.view?.webContents.focus();
   broadcast();
@@ -406,7 +409,8 @@ async function applyAdblock(svc) {
 //   Les finestres de trucada ja obertes continuen tenint so.
 // "Mostra notificacions" desactivat: no surt cap notificació d'aquell servei.
 function soundFlags(svc) {
-  return { silent: !!svc?.muted, notify: svc ? svc.notifications !== false : true, adblock: svc ? wantsAdblock(svc) : false };
+  return { silent: !!svc?.muted, notify: svc ? svc.notifications !== false : true, adblock: svc ? wantsAdblock(svc) : false,
+    aiNotify: svc ? svc.aiNotify !== false : false };
 }
 function setSound(svc, patch) {
   if ('muted' in patch) svc.muted = !!patch.muted;
@@ -512,6 +516,33 @@ function registerIpc() {
   // Preload de servei: demana l'estat de so/notificacions de la seva pestanya
   ipcMain.on('mh:flags', (e) => { e.returnValue = soundFlags(service(e.sender.session?.__mhServiceId)); });
   // Clic en una notificació: mostra MultiHub i obre aquell servei
+  // Claude / ChatGPT han acabat de respondre (detectat pel preload del servei)
+  ipcMain.on('mh:ai-done', (e, info) => {
+    const svc = service(e.sender.session?.__mhServiceId);
+    const v = svc && views.get(svc.id);
+    if (!svc || !v || svc.aiNotify === false) return;
+    const watching = win && !win.isDestroyed() && win.isVisible() && win.isFocused() && store.data.activeId === svc.id && !lock.locked;
+    if (watching) return; // ja la tens davant
+    v.aiPending = true;
+    broadcast();
+    if (svc.notifications === false || !Notification.isSupported()) return;
+    const iconUrl = icons.get(icons.keyFor(svc));
+    const n = new Notification({
+      title: `${svc.name}: resposta llesta ✅`,
+      body: lock.locked ? 'Ha acabat de respondre' : (String(info?.title || '').slice(0, 120) || 'Ha acabat de respondre'),
+      silent: !!svc.muted,
+      icon: iconUrl ? nativeImage.createFromDataURL(iconUrl) : undefined
+    });
+    n.on('click', () => {
+      if (win.isMinimized()) win.restore();
+      win.show(); win.focus();
+      if (!lock.locked) activate(svc.id);
+    });
+    n.show();
+  });
+  // En tornar a la finestra amb el servei obert, la resposta ja compta com a vista
+  win.on('focus', () => { const v = views.get(store.data.activeId); if (v?.aiPending) { v.aiPending = false; broadcast(); } });
+
   ipcMain.on('mh:notification-click', (e) => {
     const id = e.sender.session?.__mhServiceId;
     if (!win || win.isDestroyed()) return;
@@ -582,6 +613,8 @@ function registerIpc() {
       { label: 'Recarrega', click: () => serviceAction(id, 'reload') },
       { label: 'Silencia (sense sons ni avisos sonors)', type: 'checkbox', checked: !!svc.muted, click: () => serviceAction(id, 'mute') },
       { label: 'Bloqueja anuncis', type: 'checkbox', enabled: store.data.settings.adblock !== false, checked: wantsAdblock(svc), click: () => serviceAction(id, 'adblock') },
+      ...(AI_TYPES.has(svc.type) || /claude\.ai|chatgpt\.com|chat\.openai\.com/.test(svc.url) ? [{ label: 'Avisa quan acabi una resposta', type: 'checkbox',
+        checked: svc.aiNotify !== false, click: () => { svc.aiNotify = svc.aiNotify === false; setSound(svc, {}); } }] : []),
       { label: 'Mostra notificacions', type: 'checkbox', checked: svc.notifications !== false, click: () => serviceAction(id, 'notifications') },
       { label: 'Edita…', click: () => win.webContents.send('ui:open', 'edit', id) },
       { label: 'Mou al grup', submenu: [
@@ -708,6 +741,8 @@ app.on('web-contents-created', (_e, wc) => {
   // Les finestres que obren els serveis (trucades, inicis de sessió, gestor de fitxers de cPanel...) també tenen menú
   if (wc.session?.__mhServiceId && wc.getType() === 'window') attachContextMenu(wc);
 });
+
+if (process.platform === 'win32') app.setAppUserModelId('cat.alexmf.multihub'); // necessari per a les notificacions de Windows
 
 app.whenReady().then(async () => {
   store = new Store();
