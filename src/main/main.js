@@ -301,7 +301,7 @@ function serviceAction(id, action) {
       svc.zoom = Math.round(z * 10) / 10; wc?.setZoomFactor(svc.zoom); store.save(); break;
     }
     case 'mute': setSound(svc, { muted: !svc.muted }); break;
-    case 'adblock': svc.adblock = svc.adblock === false; store.save(); applyAdblock(svc).then(() => wc?.reload()); broadcast(); break;
+    case 'adblock': svc.adblock = !adblockChoice(svc); store.save(); applyAdblock(svc).then(() => wc?.reload()); broadcast(); break;
     case 'notifications': setSound(svc, { notifications: svc.notifications === false }); break;
     case 'clearCache': session.fromPartition(`persist:service-${id}`).clearCache().then(() => wc?.reload()); break;
   }
@@ -390,7 +390,11 @@ function buildMenu() {
 }
 
 // ── Bloquejador d'anuncis ───────────────────────────────────────────────────
-function wantsAdblock(svc) { return store.data.settings.adblock !== false && svc.adblock !== false; }
+// Serveis sense anuncis: el bloquejador hi va desactivat per defecte. Les llistes de rastrejadors
+// poden tallar connexions internes (p. ex. WhatsApp Web deixa de desxifrar missatges).
+const NO_ADS_BY_DEFAULT = new Set(['whatsapp', 'discord', 'claude', 'chatgpt', 'cpanel', 'roundcube', 'gdrive', 'gmail', 'outlook']);
+function adblockChoice(svc) { return typeof svc.adblock === 'boolean' ? svc.adblock : !NO_ADS_BY_DEFAULT.has(svc.type); }
+function wantsAdblock(svc) { return store.data.settings.adblock !== false && adblockChoice(svc); }
 async function applyAdblock(svc) {
   const ses = session.fromPartition(`persist:service-${svc.id}`);
   ses.__mhWantsAdblock = wantsAdblock(svc);
